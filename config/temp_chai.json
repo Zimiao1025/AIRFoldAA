@@ -1,0 +1,11 @@
+{
+    "name": "xxx",
+    "fasta_path": "xxx",
+    "output_dir": "xxx",
+    "a3m_paths":["xxx", "xxx", "xxx"],
+    "run_config": {
+      "ntr": 4,
+      "ndt": 200,
+      "random_seed":0
+    }
+  }

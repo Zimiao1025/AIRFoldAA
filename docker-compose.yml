@@ -1,0 +1,100 @@
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+      args:
+        - http_proxy=${http_proxy}
+        - https_proxy=${https_proxy}
+        - USER_ID=${UID}
+        - GROUP_ID=${GID}
+        - USER_NAME=${USER_NAME}
+    ports:
+      - "5000:8081"
+    depends_on:
+      - redis
+    volumes:
+      - ./api:/app
+      - /data:/data
+      - ./lib:/app/lib
+    environment:
+      - TZ=Asia/Shanghai
+      - CELERY_BROKER_URL=redis://redis
+      - CELERY_RESULT_BACKEND=redis://redis
+      - HOST=0.0.0.0
+      - PORT=8081
+    command: uvicorn api:app --host 0.0.0.0 --port 8081
+
+  worker_alphafold3:
+    build:
+      context: ./services/alphafold3
+      dockerfile: Dockerfile
+      args:
+        - http_proxy=${http_proxy}
+        - https_proxy=${https_proxy}
+        - USER_ID=${UID}
+        - GROUP_ID=${GID}
+        - USER_NAME=${USER_NAME}
+    depends_on:
+      - redis
+    environment:
+      - TZ=Asia/Shanghai
+      - CELERY_BROKER_URL=redis://redis
+      - CELERY_RESULT_BACKEND=redis://redis
+      - DOCKER_CLIENT_TIMEOUT=${DOCKER_CLIENT_TIMEOUT}
+      - COMPOSE_HTTP_TIMEOUT=${COMPOSE_HTTP_TIMEOUT}
+      - NVIDIA_VISIBLE_DEVICES=all
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: "nvidia"
+            count: "all"
+            capabilities: ["gpu"]
+    volumes:
+      - ./services/alphafold3:/worker
+      - /data:/data
+      - /tmp:/tmp
+      - ./lib:/worker/lib
+    command: celery -A worker worker --loglevel=info -Q queue_alphafold3 --concurrency=8
+  
+  worker_chai:
+    build:
+      context: ./services/chai
+      dockerfile: Dockerfile
+      args:
+        - http_proxy=${http_proxy}
+        - https_proxy=${https_proxy}
+        - USER_ID=${UID}
+        - GROUP_ID=${GID}
+        - USER_NAME=${USER_NAME}
+    depends_on:
+      - redis
+    environment:
+      - TZ=Asia/Shanghai
+      - CELERY_BROKER_URL=redis://redis
+      - CELERY_RESULT_BACKEND=redis://redis
+      - DOCKER_CLIENT_TIMEOUT=${DOCKER_CLIENT_TIMEOUT}
+      - COMPOSE_HTTP_TIMEOUT=${COMPOSE_HTTP_TIMEOUT}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CHAI_DOWNLOADS_DIR=/data/protein/datasets_2024/chai-1/downloads
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: "nvidia"
+            count: "all"
+            capabilities: ["gpu"]
+    volumes:
+      - ./services/chai:/worker
+      - /data:/data
+      - /tmp:/tmp
+      - ./lib:/worker/lib
+    command: celery -A worker worker --loglevel=info -Q queue_chai --concurrency=8
+      
+  redis:
+    image: redis:latest
+
+networks:
+  default:
+    driver: bridge
